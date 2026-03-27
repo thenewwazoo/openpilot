@@ -17,6 +17,8 @@ from opendbc.car.carlog import carlog
 from opendbc.car.fw_versions import ObdCallback
 from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
+from opendbc.car.isotp_parallel_query import IsoTpParallelQuery
+from opendbc.car.gm.values import EV_CAR
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
 
@@ -153,8 +155,51 @@ class Car:
     self.is_metric = self.params.get_bool("IsMetric")
     self.experimental_mode = self.params.get_bool("ExperimentalMode")
 
+    # HV battery SoC polling for GM EVs
+    self._soc: float | None = None
+    self._soc_lock = threading.Lock()
+    if self.CP.carFingerprint in EV_CAR:
+      self._start_soc_poller()
+
     # card is driven by can recv, expected at 100Hz
     self.rk = Ratekeeper(100, print_delay_threshold=None)
+
+  def _start_soc_poller(self) -> None:
+    """Poll HV battery SoC from the BECM via UDS every 10 seconds."""
+    soc_sock = messaging.sub_sock('can')
+    sendcan_sock = self.pm.sock['sendcan']
+
+    def _can_recv(wait_for_one: bool = False) -> list[list[CanData]]:
+      return [[CanData(m.address, m.dat, m.src) for m in pkt.can]
+              for pkt in messaging.drain_sock(soc_sock, wait_for_one=wait_for_one)]
+
+    def _can_send(msgs: list[CanData]) -> None:
+      sendcan_sock.send(can_list_to_can_capnp(msgs, msgtype='sendcan'))
+
+    BECM_ADDR = 0x7E4
+    SOC_DID = b'\x22\x83\x34'
+    SOC_RESP = b'\x62\x83\x34'
+
+    def _poll():
+      cloudlog.warning("SoC poller thread started")
+      while True:
+        cloudlog.warning("SoC poll: sending query to BECM")
+        try:
+          query = IsoTpParallelQuery(_can_send, _can_recv, bus=0, addrs=[BECM_ADDR],
+                                     request=[SOC_DID], response=[SOC_RESP])
+          results = query.get_data(timeout=1.0, total_timeout=2.0)
+          cloudlog.warning(f"SoC poll results: {results}")
+          if (BECM_ADDR, None) in results:
+            raw = results[(BECM_ADDR, None)]
+            if len(raw) >= 1:
+              with self._soc_lock:
+                self._soc = (raw[0] * 39) / 99 / 100.0
+              cloudlog.warning(f"SoC updated: raw={raw[0]}, soc={self._soc}")
+        except Exception:
+          cloudlog.exception("SoC poll failed")
+        time.sleep(10.0)
+
+    threading.Thread(target=_poll, daemon=True, name="soc_poller").start()
 
   def state_update(self) -> tuple[car.CarState, structs.RadarDataT | None]:
     """carState update loop, driven by can"""
@@ -187,6 +232,11 @@ class Car:
     # TODO: mirror the carState.cruiseState struct?
     CS.vCruise = float(self.v_cruise_helper.v_cruise_kph)
     CS.vCruiseCluster = float(self.v_cruise_helper.v_cruise_cluster_kph)
+
+    with self._soc_lock:
+      soc = self._soc
+    if soc is not None:
+      CS.fuelGauge = float(soc)
 
     return CS, RD
 
