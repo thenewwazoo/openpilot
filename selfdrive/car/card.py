@@ -18,7 +18,7 @@ from opendbc.car.fw_versions import ObdCallback
 from opendbc.car.car_helpers import get_car, interfaces
 from opendbc.car.interfaces import CarInterfaceBase, RadarInterfaceBase
 from opendbc.car.isotp_parallel_query import IsoTpParallelQuery
-from opendbc.car.gm.values import EV_CAR, GM_RX_OFFSET
+from opendbc.car.gm.values import EV_CAR
 from openpilot.selfdrive.pandad import can_capnp_to_list, can_list_to_can_capnp
 from openpilot.selfdrive.car.cruise import VCruiseHelper
 
@@ -186,7 +186,7 @@ class Car:
         cloudlog.warning("SoC poll: sending query to BECM")
         try:
           query = IsoTpParallelQuery(_can_send, _can_recv, bus=0, addrs=[BECM_ADDR],
-                                     request=[SOC_DID], response=[SOC_RESP], response_offset=GM_RX_OFFSET)
+                                     request=[SOC_DID], response=[SOC_RESP])
           results = query.get_data(timeout=1.0, total_timeout=2.0)
           cloudlog.warning(f"SoC poll results: {results}")
           if (BECM_ADDR, None) in results:
