@@ -47,7 +47,7 @@ p.can_clear(BUS)
 p.can_send(BECM_ADDR, REQUEST, BUS)
 send_time = time.monotonic()
 
-print(f"  Listening for 2s...")
+print("  Listening for 2s...")
 responses = []
 deadline = time.monotonic() + 2.0
 while time.monotonic() < deadline:
