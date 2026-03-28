@@ -5,7 +5,7 @@ import cereal.messaging as messaging
 from cereal import car
 from opendbc.car.carlog import carlog
 from opendbc.car.fw_versions import get_fw_versions, match_fw_to_car
-from opendbc.car.vin import get_vin
+from opendbc.car.vin import get_vin, get_soc
 from openpilot.common.params import Params
 from openpilot.selfdrive.car.card import can_comm_callbacks, obd_callback
 from typing import Any
@@ -70,3 +70,11 @@ if __name__ == "__main__":
   print()
   print("Possible matches:", candidates)
   print(f"Getting fw took {time.monotonic() - t:.3f} s")
+
+  print()
+  print("Querying BECM for SoC...")
+  raw = get_soc(*can_callbacks)
+  if raw is not None:
+    print(f"  raw={raw.hex()}  byte0={raw[0]}  soc={(raw[0] * 39) / 99 / 100.0:.3f}")
+  else:
+    print("  No response")
