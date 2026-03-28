@@ -73,8 +73,9 @@ if __name__ == "__main__":
 
   print()
   print("Querying BECM for SoC...")
-  raw = get_soc(*can_callbacks)
-  if raw is not None:
-    print(f"  raw={raw.hex()}  byte0={raw[0]}  soc={(raw[0] * 39) / 99 / 100.0:.3f}")
+  result = get_soc(*can_callbacks)
+  if result is not None:
+    desc, raw = result
+    print(f"  OK via {desc}: raw={raw.hex()}  byte0={raw[0]}  soc={(raw[0] * 39) / 99 / 100.0:.3f}")
   else:
-    print("  No response")
+    print("  No response on any attempt")
