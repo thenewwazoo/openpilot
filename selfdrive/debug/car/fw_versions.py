@@ -72,10 +72,15 @@ if __name__ == "__main__":
   print(f"Getting fw took {time.monotonic() - t:.3f} s")
 
   print()
-  print("Querying BECM for SoC...")
+  print("Querying for SoC...")
   result = get_soc(*can_callbacks)
   if result is not None:
     desc, raw = result
-    print(f"  OK via {desc}: raw={raw.hex()}  byte0={raw[0]}  soc={(raw[0] * 39) / 99 / 100.0:.3f}")
+    print(f"  OK via {desc}: raw={raw.hex()}  byte0={raw[0]}")
+    if "0x5B" in desc:
+      print(f"  soc (A/2.55)       = {raw[0] / 2.55:.1f}%")
+    else:
+      print(f"  soc (A*100/255)    = {raw[0] * 100 / 255:.1f}%")
+      print(f"  energy (A*39/99)   = {raw[0] * 39 / 99:.2f} kWh")
   else:
     print("  No response on any attempt")
